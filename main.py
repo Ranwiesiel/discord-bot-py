@@ -1,4 +1,3 @@
-
 import discord
 from discord import interactions
 from discord.ext import commands
@@ -17,11 +16,15 @@ logger = settings.logging.getLogger("bot")  #membuat log
 class NotOwner(commands.CheckFailure):
   ...
 
+
 def is_owner():
-  def predicate(interaction : discord.Interaction):
+
+  def predicate(interaction: discord.Interaction):
     if interaction.user.id == settings.owner_id:
       return True
+
   return app_commands.check(predicate)
+
 
 #hanya owner yang bisa
 def is_owner():
@@ -41,11 +44,11 @@ intents.members = True
 bot = commands.Bot(command_prefix="$",
                    intents=intents)  #deklarasi bot dengan commandnya
 
+
 class Food(enum.Enum):
   apple = 1
   banana = 2
   cherry = 3
-
 
 
 class Tampar(commands.Converter):  #custom converter user input
@@ -66,11 +69,10 @@ async def on_ready():
   logger.info(f"We have logged in as {bot.user} (ID {bot.user.id})")
   print("=" * 50)
 
-  
   # mygroup = MyGroup(name="greetings", description="Welcomes users")
   # bot.tree.add_command(mygroup)
   await bot.load_extension("slashcmds.welcome")
-  
+
   bot.tree.copy_global_to(guild=settings.GUILDS_ID)
   await bot.tree.sync(guild=settings.GUILDS_ID)
 
@@ -99,42 +101,52 @@ async def on_ready():
 
 #sintaks apps atau plas klik kanan
 @bot.tree.context_menu(name="Show join date")
-async def get_joined_date(interaction: discord.Interaction, member: discord.Member):
-  await interaction.response.send_message(f"Member bergabung: {discord.utils.format_dt(member.joined_at)} ", ephemeral=True)
+async def get_joined_date(interaction: discord.Interaction,
+                          member: discord.Member):
+  await interaction.response.send_message(
+      f"Member bergabung: {discord.utils.format_dt(member.joined_at)} ",
+      ephemeral=True)
+
 
 @bot.tree.context_menu(name="Report Messsage")
-async def report_message(interaction: discord.Interaction, message: discord.Message):
+async def report_message(interaction: discord.Interaction,
+                         message: discord.Message):
   await interaction.response.send_message(f"Message reported ", ephemeral=True)
+
 
 # @bot.tree.context_menu(name="Report Messsage")
 # async def report_message(interaction: discord.Interaction, channel: discord.VoiceChannel):
 #   await interaction.response.send_message(f"Message reported ", ephemeral=True)
 
+
 @bot.tree.command()
 @is_owner()
-async def katakan2(interaction: discord.Interaction, text_to_send : str):
+async def katakan2(interaction: discord.Interaction, text_to_send: str):
   """ hehe """
   await interaction.response.send_message(f"{text_to_send}", ephemeral=True)
+
 
 # @say.error
 # async def say_error(interaction: discord.Interaction, error):
 #   await interaction.response.send_message("Not allowed", empheral=True)
 
+
 @bot.tree.command()
 @app_commands.describe(text_to_send="Tulul..")
 @app_commands.rename(text_to_send="pesan")
-async def katakan(interaction: discord.Interaction, text_to_send : str):
+async def katakan(interaction: discord.Interaction, text_to_send: str):
   await interaction.response.send_message(f"{text_to_send}", ephemeral=True)
+
 
 #auto completion dekorasi
 async def minum_autocompletion(
-  interaction: discord.Interaction,
-  current: str,
+    interaction: discord.Interaction,
+    current: str,
 ) -> typing.List[app_commands.Choice[str]]:
   data = []
   for minum_choice in ['beer', 'susu', 'teh', 'kopi']:
     if current.lower() in minum_choice.lower():
-      data.append(app_commands.Choice(name-minum_choice, value=minum_choice))
+      data.append(app_commands.Choice(name - minum_choice, value=minum_choice))
   return data
 
 
@@ -142,20 +154,22 @@ async def minum_autocompletion(
 @app_commands.autocomplete(choice=minum_autocompletion)
 async def minum(interaction: discord.Interaction, choice: str):
   await interaction.response.send_message(f"{choice}", ephemeral=True)
-  
+
 
 @bot.tree.command()
-async def makan(interaction: discord.Interaction, choice:Food):
+async def makan(interaction: discord.Interaction, choice: Food):
   await interaction.response.send_message(f"{choice}", ephemeral=True)
+
 
 #dekorasi command
 @bot.tree.command()
 @app_commands.choices(choice=[
-  app_commands.Choice(name="red", value="1"),
-  app_commands.Choice(name="blue", value="2"),
-  app_commands.Choice(name="green", value="3"),
+    app_commands.Choice(name="red", value="1"),
+    app_commands.Choice(name="blue", value="2"),
+    app_commands.Choice(name="green", value="3"),
 ])
-async def warna(interaction: discord.Interaction, choice:app_commands.Choice[str]):
+async def warna(interaction: discord.Interaction,
+                choice: app_commands.Choice[str]):
   await interaction.response.send_message(f"{choice}", ephemeral=True)
 
 
