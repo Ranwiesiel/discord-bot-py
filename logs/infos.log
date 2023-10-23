@@ -1,2 +1,4 @@
 INFO       - 2023-10-23 11:26:16,844 - client          : logging in using static token
 INFO       - 2023-10-23 11:26:17,564 - gateway         : Shard ID None has connected to Gateway (Session ID: ccec80feb94b0ce8c5f2709e72bc14cd).
+INFO       - 2023-10-23 11:59:47,716 - gateway         : Shard ID None has successfully RESUMED session ccec80feb94b0ce8c5f2709e72bc14cd.
+INFO       - 2023-10-23 12:50:03,373 - gateway         : Shard ID None has successfully RESUMED session ccec80feb94b0ce8c5f2709e72bc14cd.
