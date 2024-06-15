@@ -1,9 +1,0 @@
-INFO       - 2024-06-15 15:24:40,706 - client          : logging in using static token
-INFO       - 2024-06-15 15:24:42,556 - gateway         : Shard ID None has connected to Gateway (Session ID: a7b0345ddad18786318bac4dfa147de2).
-INFO       - 2024-06-15 15:24:50,020 - voice_client    : Connecting to voice...
-INFO       - 2024-06-15 15:24:50,021 - voice_client    : Starting voice handshake... (connection attempt 1)
-INFO       - 2024-06-15 15:24:50,506 - voice_client    : Voice handshake complete. Endpoint found singapore836.discord.media
-INFO       - 2024-06-15 15:30:00,229 - voice_client    : Disconnecting from voice normally, close code 1000.
-INFO       - 2024-06-15 15:30:00,316 - player          : ffmpeg process 11504 has not terminated. Waiting to terminate...
-INFO       - 2024-06-15 15:30:00,317 - voice_client    : The voice handshake is being terminated for Channel ID 592714887470514196 (Guild ID 592714885855444992)
-INFO       - 2024-06-15 15:30:00,529 - player          : ffmpeg process 11504 should have terminated with a return code of 1.
