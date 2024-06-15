@@ -1,1 +1,6 @@
-configuration.json
+.env
+.vscode
+__pycache__
+./cogs/__pycache__
+ffmpeg.exe
+logs/infos.log

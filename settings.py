@@ -1,14 +1,10 @@
 import pathlib
 from logging.config import dictConfig
 import logging
-import discord
-import os
-import json
 
-with open("configuration.json", "r") as config: 
-	data = json.load(config)
-	GUILDS_ID = discord.Object(data["guild_id"])
-print(GUILDS_ID)
+import tracemalloc
+tracemalloc.start()
+
 BASE_DIR = pathlib.Path(__file__).parent  #path root atau parent
 
 CMDS_DIR = BASE_DIR / "cmds"  #membaut path yang dituju
