@@ -3,4 +3,5 @@
 __pycache__
 ./cogs/__pycache__
 ffmpeg.exe
+./logs/infos.log
 logs/infos.log

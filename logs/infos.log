@@ -1,9 +1,35 @@
-INFO       - 2024-06-15 15:24:40,706 - client          : logging in using static token
-INFO       - 2024-06-15 15:24:42,556 - gateway         : Shard ID None has connected to Gateway (Session ID: a7b0345ddad18786318bac4dfa147de2).
-INFO       - 2024-06-15 15:24:50,020 - voice_client    : Connecting to voice...
-INFO       - 2024-06-15 15:24:50,021 - voice_client    : Starting voice handshake... (connection attempt 1)
-INFO       - 2024-06-15 15:24:50,506 - voice_client    : Voice handshake complete. Endpoint found singapore836.discord.media
-INFO       - 2024-06-15 15:30:00,229 - voice_client    : Disconnecting from voice normally, close code 1000.
-INFO       - 2024-06-15 15:30:00,316 - player          : ffmpeg process 11504 has not terminated. Waiting to terminate...
-INFO       - 2024-06-15 15:30:00,317 - voice_client    : The voice handshake is being terminated for Channel ID 592714887470514196 (Guild ID 592714885855444992)
-INFO       - 2024-06-15 15:30:00,529 - player          : ffmpeg process 11504 should have terminated with a return code of 1.
+INFO       - 2024-06-19 18:00:51,666 - client          : logging in using static token
+INFO       - 2024-06-19 18:00:53,453 - gateway         : Shard ID None has connected to Gateway (Session ID: edcc4024c110f9c2895f35577caf0495).
+ERROR      - 2024-06-19 18:01:06,676 - tree            : Ignoring exception in command tree
+Traceback (most recent call last):
+  File "C:\Users\LAB SISTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\discord\app_commands\tree.py", line 1089, in wrapper
+    await self._call(interaction)
+  File "C:\Users\LAB SISTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\discord\app_commands\tree.py", line 1221, in _call
+    command, options = self._get_app_command_options(data)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LAB SISTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\discord\app_commands\tree.py", line 1125, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command 'ping' not found
+ERROR      - 2024-06-19 18:02:17,927 - tree            : Ignoring exception in command tree
+Traceback (most recent call last):
+  File "C:\Users\LAB SISTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\discord\app_commands\tree.py", line 1089, in wrapper
+    await self._call(interaction)
+  File "C:\Users\LAB SISTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\discord\app_commands\tree.py", line 1221, in _call
+    command, options = self._get_app_command_options(data)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LAB SISTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\discord\app_commands\tree.py", line 1125, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command 'ping' not found
+ERROR      - 2024-06-19 18:02:35,440 - tree            : Ignoring exception in command tree
+Traceback (most recent call last):
+  File "C:\Users\LAB SISTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\discord\app_commands\tree.py", line 1089, in wrapper
+    await self._call(interaction)
+  File "C:\Users\LAB SISTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\discord\app_commands\tree.py", line 1221, in _call
+    command, options = self._get_app_command_options(data)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\LAB SISTER\AppData\Local\Programs\Python\Python312\Lib\site-packages\discord\app_commands\tree.py", line 1125, in _get_app_command_options
+    raise CommandNotFound(name, parents)
+discord.app_commands.errors.CommandNotFound: Application command 'katakan' not found
+INFO       - 2024-06-19 18:58:37,000 - gateway         : Shard ID None has successfully RESUMED session edcc4024c110f9c2895f35577caf0495.
+INFO       - 2024-06-19 19:23:12,780 - gateway         : Shard ID None has successfully RESUMED session edcc4024c110f9c2895f35577caf0495.
+INFO       - 2024-06-19 19:36:41,712 - gateway         : Shard ID None has successfully RESUMED session edcc4024c110f9c2895f35577caf0495.

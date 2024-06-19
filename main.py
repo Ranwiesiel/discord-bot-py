@@ -32,9 +32,14 @@ async def load_extensions():
     for filename in os.listdir('./cogs'):
         if filename.endswith('.py'):
             await bot.load_extension(f'cogs.{filename[:-3]}')
+
     for filename in os.listdir('./cmds'):
         if filename.endswith('.py'):
             await bot.load_extension(f'cmds.{filename[:-3]}')
+            
+    for filename in os.listdir('./slashcmds'):
+        if filename.endswith('.py'):
+            await bot.load_extension(f'slashcmds.{filename[:-3]}')
 
 # Events
 @bot.event
@@ -63,12 +68,27 @@ async def where_am_i(ctx):
         description=desc,
         color=discord.Color.blue()
     )
+    # embed.set_author(name=ctx.guild.name, icon_url=ctx.author.avatar)
     # embed.set_thumbnail(url=icon)
+    # embed.set_image(url=ctx.guild.icon_url)
     embed.add_field(name="Owner", value=owner, inline=True)
     embed.add_field(name="Server ID", value=guild_id, inline=True)
     embed.add_field(name="Member Count", value=memberCount, inline=True)
+    embed.set_footer(text="Server created at" + str(ctx.guild.created_at))
 
     await ctx.send(embed=embed)
+
+# check user latency
+# @bot.command()
+# async def ping(ctx):
+#     ping_embed = discord.Embed(
+#         title = "Pong!",
+#         description = f'Latency in ms',
+#         color = discord.Color.blue()
+#     )
+#     ping_embed.add_field(f'Pong! {round(bot.latency * 1000)}ms')
+#     ping_embed.set_footer(text=f'Requested by {ctx.author}')
+#     await ctx.send(embed=ping_embed)
     
 # check user info
 @bot.command()
@@ -176,6 +196,10 @@ async def stop(ctx):
     else:
         await ctx.send("The bot is not playing anything at the moment.")
 
-if __name__ == '__main__':
-    load_extensions()
-    bot.run(token)
+# Run the bot
+async def main():
+    async with bot:
+        await load_extensions()
+        await bot.start(token)
+
+asyncio.run(main())
