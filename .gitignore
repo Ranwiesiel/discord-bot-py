@@ -5,3 +5,4 @@ __pycache__
 ffmpeg.exe
 ./logs/infos.log
 logs/infos.log
+cogs/levels.db

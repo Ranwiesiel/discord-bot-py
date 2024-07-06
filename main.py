@@ -1,11 +1,11 @@
 import discord
-from discord.ext import commands,tasks
+from discord.ext import commands, tasks
 import json
 import os
 import settings
 from dotenv import load_dotenv
 import asyncio
-import yt_dlp as youtube_dl
+from itertools import cycle
 
 logger = settings.logging.getLogger("bot")
 
@@ -16,16 +16,17 @@ token = os.getenv("TOKEN")
 prefix = os.getenv("PREFIX")
 owner_id = os.getenv("OWNER_ID")
 
-class Greetings(commands.Cog):
-	def __init__(self, bot):
-		self.bot = bot
-		self._last_member = None
-
 # Intents
 intents = discord.Intents.all()
 # The bot
 client = discord.Client(intents=intents)
 bot = commands.Bot(prefix, intents = intents, owner_id = owner_id)
+
+bot_status = cycle(["$help", "Proses Maintenance", "RonggoW Jemlek", "Server Macam Apa Ini?!", "Aduhaii"])
+
+@tasks.loop(seconds=5)
+async def change_status():
+    await bot.change_presence(activity=discord.Game(next(bot_status)))
 
 # Load cogs
 async def load_extensions():
@@ -44,9 +45,10 @@ async def load_extensions():
 # Events
 @bot.event
 async def on_ready():
-	print(f"We have logged in as {bot.user}")
-	print(discord.__version__)
-	await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name =f"{bot.command_prefix}help"))
+    print(f"We have logged in as {bot.user}")
+    change_status.start()
+    print(discord.__version__)
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name =f"{bot.command_prefix}help"))
 
 # shutdown command
 @bot.command()
@@ -95,106 +97,6 @@ async def where_am_i(ctx):
 async def tell_me_about_yourself(ctx):
     text = "I am a bot created by a human named " + str(bot.owner_id) + " and I am here to help you."
     await ctx.send(text)
-
-# youtbe player
-youtube_dl.utils.bug_reports_message = lambda: ''
-
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'auto',
-    'source_address': '0.0.0.0' # bind to ipv4 since ipv6 addresses cause issues sometimes
-}
-
-ffmpeg_options = {
-    'options': '-vn'
-}
-
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
-
-class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.5):
-        super().__init__(source, volume)
-        self.data = data
-        self.title = data.get('title')
-        self.url = ""
-
-    @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
-        loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-        if 'entries' in data:
-            # take first item from a playlist
-            data = data['entries'][0]
-        filename = data['title'] if stream else ytdl.prepare_filename(data)
-        return filename
-
-# bot join and leave voice channel
-@bot.command(name='join', help='Tells the bot to join the voice channel')
-async def join(ctx):
-    if not ctx.message.author.voice:
-        await ctx.send("{} is not connected to a voice channel".format(ctx.message.author.name))
-        return
-    else:
-        channel = ctx.message.author.voice.channel
-    await channel.connect()
-
-@bot.command(name='leave', help='To make the bot leave the voice channel')
-async def leave(ctx):
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_connected():
-        await voice_client.disconnect()
-    else:
-        await ctx.send("The bot is not connected to a voice channel.")
-        
-# bot play, pause, resume, stop song
-@bot.command(name='play_song', help='To play song')
-async def play(ctx,url):
-    try :
-        server = ctx.message.guild
-        voice_channel = server.voice_client
-
-        async with ctx.typing():
-            try:
-                filename = await YTDLSource.from_url(url, loop=bot.loop)
-                voice_channel.play(discord.FFmpegPCMAudio(executable="ffmpeg.exe", source=filename))
-            except Exception as e:
-                await ctx.send('An error occurred while processing this request: {}'.format(str(e)))
-                return
-        await ctx.send('**Now playing:** {}'.format(filename))
-    except:
-        await ctx.send("The bot is not connected to a voice channel.")
-
-
-@bot.command(name='pause', help='This command pauses the song')
-async def pause(ctx):
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_playing():
-        await voice_client.pause()
-    else:
-        await ctx.send("The bot is not playing anything at the moment.")
-    
-@bot.command(name='resume', help='Resumes the song')
-async def resume(ctx):
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_paused():
-        await voice_client.resume()
-    else:
-        await ctx.send("The bot was not playing anything before this. Use play_song command")
-
-@bot.command(name='stop', help='Stops the song')
-async def stop(ctx):
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_playing():
-        await voice_client.stop()
-    else:
-        await ctx.send("The bot is not playing anything at the moment.")
 
 # Run the bot
 async def main():
