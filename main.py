@@ -48,7 +48,18 @@ async def on_ready():
     print(f"We have logged in as {bot.user}")
     change_status.start()
     print(discord.__version__)
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name =f"{bot.command_prefix}help"))
+    # await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name =f"{bot.command_prefix}help"))
+    try:
+        synced_commands = await bot.tree.sync()
+        print(f"Synced {len(synced_commands)} commands")
+    except Exception as e:
+        print(f"Failed to sync commands: {e}")
+
+
+@bot.tree.command(name="hello", description="Say hello to the bot")
+async def hello(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Hello! {interaction.user.mention}") #, ephemeral=True
+    
 
 # shutdown command
 @bot.command()
@@ -95,7 +106,7 @@ async def where_am_i(ctx):
 # check user info
 @bot.command()
 async def tell_me_about_yourself(ctx):
-    text = "I am a bot created by a human named " + str(bot.owner_id) + " and I am here to help you."
+    text = "I am a bot created by a human named " + str(ctx.message.author.mention) + " and I am here to help you."
     await ctx.send(text)
 
 # Run the bot

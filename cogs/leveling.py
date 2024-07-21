@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
 import sqlite3
 import math
@@ -57,6 +58,8 @@ class Leveling(commands.Cog):
             conn.commit()
             conn.close()
 
+
+    """ default level command """
     @commands.command()
     async def level(self, ctx: commands.Context, member: discord.Member = None):
 
@@ -81,6 +84,34 @@ class Leveling(commands.Cog):
             await ctx.send(f"Member {member.mention} memiliki level {level} dengan {xp} XP dan butuh {level_up_xp} XP untuk naik level selanjutnya!")
         
         conn.close()
+
+
+    """ slash command """
+    @app_commands.command(name="level", description="Check your level")
+    async def level(self, interaction: discord.Interaction, member: discord.Member = None):
+
+        if member is None:
+            member = interaction.user
+
+        member_id = member.id
+        guild_id = interaction.guild.id
+
+        conn = sqlite3.connect("./cogs/levels.db")
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT * FROM Users WHERE guild_id = {guild_id} AND user_id = {member_id}")
+        result = cursor.fetchone()
+
+        if result is None:
+            await interaction.response.send_message(f"Member {member.mention} belum memiliki level!")
+        else:
+            level = result[2]
+            xp = result[3]
+            level_up_xp = result[4]
+
+            await interaction.response.send_message(f"Member {member.mention} memiliki level {level} dengan {xp} XP dan butuh {level_up_xp} XP untuk naik level selanjutnya!")
+        
+        conn.close()
+
 
 async def setup(bot):
     await bot.add_cog(Leveling(bot))
