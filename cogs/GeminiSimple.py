@@ -46,126 +46,131 @@ image_model = genai.GenerativeModel(model_name="gemini-1.5-flash", generation_co
 
 #---------------------------------------------Discord Code-------------------------------------------------
 
-
+class Gemini(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
 #On Message Function
-@bot.event
-async def on_message(message):
-    # Ignore messages sent by the bot
-    if message.author == bot.user or message.mention_everyone:
-        return
-    # Check if the bot is mentioned or the message is a DM
-    if bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
-        #Start Typing to seem like something happened
-        cleaned_text = clean_discord_message(message.content)
 
-        async with message.channel.typing():
-            # Check for image attachments
-            if message.attachments:
-                print("New Image Message FROM:" + str(message.author.id) + ": " + cleaned_text)
-                #Currently no chat history for images
-                for attachment in message.attachments:
-                    #these are the only image extentions it currently accepts
-                    if any(attachment.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp']):
-                        await message.add_reaction('🎨')
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        # Ignore messages sent by the bot
+        if message.author == self.bot.user or message.mention_everyone:
+            return
+        # Check if the bot is mentioned or the message is a DM
+        if self.bot.user.mentioned_in(message) or isinstance(message.channel, discord.DMChannel):
+            #Start Typing to seem like something happened
+            cleaned_text = self.clean_discord_message(message.content)
 
-                        async with aiohttp.ClientSession() as session:
-                            async with session.get(attachment.url) as resp:
-                                if resp.status != 200:
-                                    await message.channel.send('Unable to download the image.')
+            async with message.channel.typing():
+                # Check for image attachments
+                if message.attachments:
+                    print("New Image Message FROM:" + str(message.author.id) + ": " + cleaned_text)
+                    #Currently no chat history for images
+                    for attachment in message.attachments:
+                        #these are the only image extentions it currently accepts
+                        if any(attachment.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp']):
+                            await message.add_reaction('🎨')
+
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get(attachment.url) as resp:
+                                    if resp.status != 200:
+                                        await message.channel.send('Unable to download the image.')
+                                        return
+                                    image_data = await resp.read()
+                                    response_text = await self.generate_response_with_image_and_text(image_data, cleaned_text)
+                                    #Split the Message so discord does not get upset
+                                    await self.split_and_send_messages(message, response_text, 1700)
                                     return
-                                image_data = await resp.read()
-                                response_text = await generate_response_with_image_and_text(image_data, cleaned_text)
-                                #Split the Message so discord does not get upset
-                                await split_and_send_messages(message, response_text, 1700)
-                                return
-            #Not an Image do text response
-            else:
-                print("New Message FROM:" + str(message.author.id) + ": " + cleaned_text)
-                #Check for Keyword Reset
-                if "RESET" in cleaned_text:
-                    #End back message
-                    if message.author.id in message_history:
-                        del message_history[message.author.id]
-                    await message.channel.send("🤖 History Reset for user: " + str(message.author.name))
-                    return
-                await message.add_reaction('💬')
+                #Not an Image do text response
+                else:
+                    print("New Message FROM:" + str(message.author.id) + ": " + cleaned_text)
+                    #Check for Keyword Reset
+                    if "RESET" in cleaned_text:
+                        #End back message
+                        if message.author.id in message_history:
+                            del message_history[message.author.id]
+                        await message.channel.send("🤖 History Reset for user: " + str(message.author.name))
+                        return
+                    await message.add_reaction('💬')
 
-                #Check if history is disabled just send response
-                if(MAX_HISTORY == 0):
-                    response_text = await generate_response_with_text(cleaned_text)
+                    #Check if history is disabled just send response
+                    if(MAX_HISTORY == 0):
+                        response_text = await self.generate_response_with_text(cleaned_text)
+                        #add AI response to history
+                        await self.split_and_send_messages(message, response_text, 1700)
+                        return;
+                    #Add users question to history
+                    self.update_message_history(message.author.id,cleaned_text)
+                    response_text = await self.generate_response_with_text(self.get_formatted_message_history(message.author.id))
                     #add AI response to history
-                    await split_and_send_messages(message, response_text, 1700)
-                    return;
-                #Add users question to history
-                update_message_history(message.author.id,cleaned_text)
-                response_text = await generate_response_with_text(get_formatted_message_history(message.author.id))
-                #add AI response to history
-                update_message_history(message.author.id,response_text)
-                #Split the Message so discord does not get upset
-                await split_and_send_messages(message, response_text, 1700)
+                    self.update_message_history(message.author.id,response_text)
+                    #Split the Message so discord does not get upset
+                    await self.split_and_send_messages(message, response_text, 1700)
 
-#---------------------------------------------AI Generation History-------------------------------------------------
+    #---------------------------------------------AI Generation History-------------------------------------------------
 
-async def generate_response_with_text(message_text):
-    prompt_parts = [message_text]
-    print("Got textPrompt: " + message_text)
-    response = text_model.generate_content(prompt_parts)
-    if(response._error):
-        return "❌" +  str(response._error)
-    return response.text
+    async def generate_response_with_text(self, message_text):
+        prompt_parts = [message_text]
+        print("Got textPrompt: " + message_text)
+        response = text_model.generate_content(prompt_parts)
+        if(response._error):
+            return "❌" +  str(response._error)
+        return response.text
 
-async def generate_response_with_image_and_text(image_data, text):
-    image_parts = [{"mime_type": "image/jpeg", "data": image_data}]
-    prompt_parts = [image_parts[0], f"\n{text if text else 'What is this a picture of?'}"]
-    response = image_model.generate_content(prompt_parts)
-    if(response._error):
-        return "❌" +  str(response._error)
-    return response.text
+    async def generate_response_with_image_and_text(self, image_data, text):
+        image_parts = [{"mime_type": "image/jpeg", "data": image_data}]
+        prompt_parts = [image_parts[0], f"\n{text if text else 'What is this a picture of?'}"]
+        response = image_model.generate_content(prompt_parts)
+        if(response._error):
+            return "❌" +  str(response._error)
+        return response.text
 
-#---------------------------------------------Message History-------------------------------------------------
-def update_message_history(user_id, text):
-    # Check if user_id already exists in the dictionary
-    if user_id in message_history:
-        # Append the new message to the user's message list
-        message_history[user_id].append(text)
-        # If there are more than 12 messages, remove the oldest one
-        if len(message_history[user_id]) > MAX_HISTORY:
-            message_history[user_id].pop(0)
-    else:
-        # If the user_id does not exist, create a new entry with the message
-        message_history[user_id] = [text]
+    #---------------------------------------------Message History-------------------------------------------------
+    def update_message_history(self, user_id, text):
+        # Check if user_id already exists in the dictionary
+        if user_id in message_history:
+            # Append the new message to the user's message list
+            message_history[user_id].append(text)
+            # If there are more than 12 messages, remove the oldest one
+            if len(message_history[user_id]) > MAX_HISTORY:
+                message_history[user_id].pop(0)
+        else:
+            # If the user_id does not exist, create a new entry with the message
+            message_history[user_id] = [text]
 
-def get_formatted_message_history(user_id):
-    """
-    Function to return the message history for a given user_id with two line breaks between each message.
-    """
-    if user_id in message_history:
-        # Join the messages with two line breaks
-        return '\n\n'.join(message_history[user_id])
-    else:
-        return "No messages found for this user."
+    def get_formatted_message_history(self, user_id):
+        """
+        Function to return the message history for a given user_id with two line breaks between each message.
+        """
+        if user_id in message_history:
+            # Join the messages with two line breaks
+            return '\n\n'.join(message_history[user_id])
+        else:
+            return "No messages found for this user."
 
-#---------------------------------------------Sending Messages-------------------------------------------------
-async def split_and_send_messages(message_system, text, max_length):
+    #---------------------------------------------Sending Messages-------------------------------------------------
+    async def split_and_send_messages(self, message_system, text, max_length):
 
-    # Split the string into parts
-    messages = []
-    for i in range(0, len(text), max_length):
-        sub_message = text[i:i+max_length]
-        messages.append(sub_message)
+        # Split the string into parts
+        messages = []
+        for i in range(0, len(text), max_length):
+            sub_message = text[i:i+max_length]
+            messages.append(sub_message)
 
-    # Send each part as a separate message
-    for string in messages:
-        await message_system.channel.send(string)
+        # Send each part as a separate message
+        for string in messages:
+            await message_system.channel.send(string)
 
-def clean_discord_message(input_string):
-    # Create a regular expression pattern to match text between < and >
-    bracket_pattern = re.compile(r'<[^>]+>')
-    # Replace text between brackets with an empty string
-    cleaned_content = bracket_pattern.sub('', input_string)
-    return cleaned_content
+    def clean_discord_message(self, input_string):
+        # Create a regular expression pattern to match text between < and >
+        bracket_pattern = re.compile(r'<[^>]+>')
+        # Replace text between brackets with an empty string
+        cleaned_content = bracket_pattern.sub('', input_string)
+        return cleaned_content
 
 
 
 
 #---------------------------------------------Run Bot-------------------------------------------------
+async def setup(bot):
+    await bot.add_cog(Gemini(bot))
