@@ -2,15 +2,22 @@ import discord
 from discord.ext import commands
 from random import choice
 import asyncpraw as praw
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 class Reddit(commands.Cog):
+    """
+    Share memes from Reddit
+    """
+
+    COG_EMOJI = "🤡"
+
     def __init__(self, bot):
         self.bot = bot
-        self.reddit = praw.Reddit(client_id="i4fjSogZkW_oxsngqr7_DA", client_secret="mtJiT5UuNifDsyLj-sHZMqg4eLnoPw", user_agent="script:randomeme:v1.0 (by u/Ranwiesiel)")
-
-    # @commands.Cog.listener()
-    # async def on_ready(self):
-    #     print(f"Reddit cog is loaded")
+        self.reddit = praw.Reddit(client_id=os.getenv('CLIENT_ID_REDDIT'), client_secret=os.getenv('CLIENT_SECRET_REDDIT'), user_agent="script:randomeme:v1.0 (by u/Ranwiesiel)")
+        
 
     @commands.command(name="meme", aliases=["memes"])
     async def meme(self, ctx: commands.Context):

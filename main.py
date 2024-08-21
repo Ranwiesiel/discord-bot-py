@@ -1,60 +1,117 @@
 import discord
 from discord.ext import commands, tasks
-import json
-import os
+import os, random
 import settings
 from dotenv import load_dotenv
 import asyncio
 from itertools import cycle
+from motor.motor_asyncio import AsyncIOMotorClient as MotorClient
 
 logger = settings.logging.getLogger("bot")
-
 load_dotenv()
+
+
+extensions = [
+    "cogs.admin",
+    "cogs.GeminiSimple",
+    "cogs.greetings",
+    "cogs.help",
+    "cogs.leveling",
+    "cogs.ping",
+    "cogs.reddit",
+    # "cogs.simpleMusic",
+    "cogs.yt_stream",
+    "cogs.MAL.result"
+]
+
 
 # Load the environment variables
 token = os.getenv("TOKEN")
-prefix = os.getenv("PREFIX")
 owner_id = os.getenv("OWNER_ID")
+
+mongodb = {}
+bot_status_types = {
+    "playing":discord.ActivityType.playing,
+    "listening":discord.ActivityType.listening,
+    "watching": discord.ActivityType.watching,
+    "streaming": discord.ActivityType.streaming
+}
+
+async def connect_database():
+    client = MotorClient(os.getenv("MONGO"))
+    database = client['Discord-Bot-Database']
+    collections = database['General']
+    mongodb['client'] = client
+    mongodb['collections'] = collections
+    mongodb['doc'] = await collections.find_one({"_id":"bot_prefixes"})
+    mongodb['status'] = await collections.find_one({"_id":"bot_status"})
+
+
+
+def get_prefix(bot,ctx):
+    guildId = str(ctx.guild.id)
+    if ctx.guild is None or guildId not in mongodb['doc']:
+        # DM or guild prefixes not defined
+        return commands.when_mentioned_or(*["$"])(bot,ctx)
+
+    guild_prefixes = mongodb['doc'][guildId]
+    if guildId in mongodb['doc']:
+        return commands.when_mentioned_or(*guild_prefixes)(bot,ctx)
 
 # Intents
 intents = discord.Intents.all()
 # The bot
-client = discord.Client(intents=intents)
-bot = commands.Bot(prefix, intents = intents, owner_id = owner_id)
+bot = commands.Bot(command_prefix=get_prefix, intents = intents, owner_id = owner_id)
 
-bot_status = cycle(["$help", "Proses Maintenance", "RonggoW Jemlek", "Server Macam Apa Ini?!", "Aduhaii"])
 
-@tasks.loop(seconds=5)
-async def change_status():
-    await bot.change_presence(activity=discord.Game(next(bot_status)))
+@tasks.loop(minutes=1)
+async def auto_change_bot_status():
+    status_type = random.choice(list(mongodb['status']['ranwbot'].keys()))
+    status_message = random.choice(mongodb['status']['ranwbot'][status_type])
+    await bot.change_presence(activity=discord.Activity(name=status_message,type=bot_status_types[status_type]))
+
+@auto_change_bot_status.after_loop
+async def after_auto_status_loop():
+    auto_change_bot_status.change_interval(minutes=random.randint(15,540))
 
 # Load cogs
-async def load_extensions():
-    for filename in os.listdir('./cogs'):
-        if filename.endswith('.py'):
-            await bot.load_extension(f'cogs.{filename[:-3]}')
-
-    for filename in os.listdir('./cmds'):
-        if filename.endswith('.py'):
-            await bot.load_extension(f'cmds.{filename[:-3]}')
-            
-    for filename in os.listdir('./slashcmds'):
-        if filename.endswith('.py'):
-            await bot.load_extension(f'slashcmds.{filename[:-3]}')
+# async def load_extensions():
+#     for filename in os.listdir('./cogs'):
+#         if filename.endswith('.py'):
+#             await bot.load_extension(f'cogs.{filename[:-3]}')
 
 # Events
 @bot.event
+async def setup_hook():
+    await connect_database()
+
+@bot.event
 async def on_ready():
     print(f"We have logged in as {bot.user}")
-    change_status.start()
+    auto_change_bot_status.start()
     print(discord.__version__)
-    # await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name =f"{bot.command_prefix}help"))
+    await load_bot_extensions()
     try:
         synced_commands = await bot.tree.sync()
         print(f"Synced {len(synced_commands)} commands")
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 
+@bot.event
+async def on_guild_join(guild):
+    if str(guild.id) not in mongodb['doc']:
+        mongodb['doc'][str(guild.id)] = ["$"]
+        await mongodb['collections'].update_one({'_id':'bot_prefixes'},{'$set':{str(guild.id):["$"]}})
+
+@bot.command(name='view-prefixes')
+async def view_prefixes(ctx):
+    """
+    View current prefixes the bot has for the server.
+    {command_prefix}{command_name}
+    """
+    if str(ctx.guild.id) not in mongodb['doc']:
+        return await ctx.send("$")
+    return await ctx.send("**{}**".format('\n'.join(mongodb['doc'][str(ctx.guild.id)])))
 
 @bot.tree.command(name="hello", description="Say hello to the bot")
 async def hello(interaction: discord.Interaction):
@@ -90,29 +147,22 @@ async def where_am_i(ctx):
     embed.set_footer(text="Server created at" + str(ctx.guild.created_at))
 
     await ctx.send(embed=embed)
-
-# check user latency
-# @bot.command()
-# async def ping(ctx):
-#     ping_embed = discord.Embed(
-#         title = "Pong!",
-#         description = f'Latency in ms',
-#         color = discord.Color.blue()
-#     )
-#     ping_embed.add_field(f'Pong! {round(bot.latency * 1000)}ms')
-#     ping_embed.set_footer(text=f'Requested by {ctx.author}')
-#     await ctx.send(embed=ping_embed)
     
 # check user info
 @bot.command()
-async def tell_me_about_yourself(ctx):
-    text = "I am a bot created by a human named " + str(ctx.message.author.mention) + " and I am here to help you."
+async def whoareu(ctx):
+    text = "I am a bot created by a human named <@592585000663121930> and I am here to help you."
     await ctx.send(text)
 
+async def load_bot_extensions():
+    for ext in extensions:
+        await bot.load_extension(ext)
+
 # Run the bot
+
 async def main():
     async with bot:
-        await load_extensions()
+        # await load_extensions()
         await bot.start(token)
 
 asyncio.run(main())

@@ -1,115 +1,681 @@
-import discord
-from discord.ext import commands
-import yt_dlp as youtube_dl
 import asyncio
+import math
+import random
+from typing import Optional
+import typing
+import discord
+from discord.ext.commands.context import Context
+import wavelink,os
+from motor.motor_asyncio import AsyncIOMotorClient as MotorClient
+from discord.ext import commands
+from wavelink import Player,Node
+from discord.ext import tasks
+import os
 
-# youtube player
-youtube_dl.utils.bug_reports_message = lambda: ''
+from database.database_handler import MongoDatabase
 
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'auto',
-    'source_address': '0.0.0.0'  # bind to ipv4 since ipv6 addresses cause issues sometimes
-}
+class Music(commands.Cog):
+    """
+    Play music from Youtube and listen together with people in voice channel
+    """
+    def __init__(self,bot) -> None:
+        self.bot:commands.Bot = bot
+        self.messages = {}
+        self.no_cog_check = ['playlist',' poplaylist','serversongs','nowplaying','np','queue']
+        self.musicDoc:MongoDatabase
 
-ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn'
-}
+    async def cog_load(self):
+        await self.setup_database()
+        server_uri = f"http://127.0.0.1:2333"
+        node:Node = Node(uri=server_uri,password=os.getenv("lavalink_password"),identifier='ranwbot',inactive_channel_tokens=2,inactive_player_timeout=300)
+        await wavelink.Pool.connect(client=self.bot,nodes=[node])
+        self.node:Node = wavelink.Pool.get_node('ranwbot')
+        print(f"Node: {self.node}")
 
-class YTDLSource(discord.PCMVolumeTransformer):
-    ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
-
-    def __init__(self, source, *, data, volume=0.5):
-        super().__init__(source, volume)
-        self.data = data
-        self.title = data.get('title')
-        self.url = data.get('url')
-
-    @classmethod
-    async def from_url(cls, url, *, loop=None, stream=True):
-        loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: cls.ytdl.extract_info(url, download=not stream))
-
-        if 'entries' in data:
-            # take first item from a playlist
-            data = data['entries'][0]
-
-        filename = data['url'] if stream else cls.ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
-
-class YtStream(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    # bot join and leave voice channel
-    @commands.command(name='join', help='Tells the bot to join the voice channel')
-    async def join(self, ctx: commands.Context):
-        if not ctx.message.author.voice:
-            await ctx.send("{} is not connected to a voice channel".format(ctx.message.author.name))
-            return
-        else:
-            channel = ctx.message.author.voice.channel
-        await channel.connect()
-
-    @commands.command(name='leave', help='To make the bot leave the voice channel')
-    async def leave(self, ctx: commands.Context):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_connected():
-            await voice_client.disconnect()
-        else:
-            await ctx.send("The bot is not connected to a voice channel.")
-            
-    # bot play, pause, resume, stop song
-    @commands.command(name='play', help='To play song')
-    async def play(self, ctx: commands.Context, url):
-        try:
-            server = ctx.message.guild
-            voice_channel = server.voice_client
-
-            async with ctx.typing():
-                try:
-                    player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
-                    voice_channel.play(player, after=lambda e: print('Player error: %s' % e) if e else None)
-                except Exception as e:
-                    await ctx.send('An error occurred while processing this request: {}'.format(str(e)))
-                    return
-            await ctx.send('**Now playing:** {}'.format(player.title))
-        except Exception as e:
-            await ctx.send("The bot is not connected to a voice channel: {}".format(str(e)))
+    async def setup_database(self):
+        client = MotorClient(os.getenv("MONGO"))
+        database = client['Discord-Bot-Database']
+        collection = database['General']
+        doc = await collection.find_one("music")
+        self.musicDoc = MongoDatabase(client,collection,doc)
+    async def cog_command_error(self, ctx: Context, error: commands.CommandError):
+        if isinstance(error,commands.CommandInvokeError):
+            return await ctx.send(error.original)
 
 
-    @commands.command(name='pause', help='This command pauses the song')
-    async def pause(self, ctx: commands.Context):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_playing():
-            voice_client.pause()
-        else:
-            await ctx.send("The bot is not playing anything at the moment.")
+
+    async def add_guild_volume(self,ctx:Context):
+        # Adds the guild to database and set default volume to 50
+        await self.musicDoc.set_items({f"{ctx.guild.id}":{"vol":50}})
+
+
+
+    # async def permission_checker(self,ctx:Context):
+    #     # NOTE: Original track player should not require permission for [skip,stop,seek]
+    #     player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+    #     command_name= ctx.command.name
+    #     author_commands = ['skip','stop','seek','popqueue']
+    #     audio_controllers = ['volume','listento','stop','disconnect','popqueue','stop','pause','resume','skip','seek']
+    #     if not player:
+    #         return False
+    #     if len(player.channel.members) == 2:
+    #         return True
         
-    @commands.command(name='resume', help='Resumes the song')
-    async def resume(self, ctx: commands.Context):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_paused():
-            voice_client.resume()
-        else:
-            await ctx.send("The bot was not playing anything before this. Use play_song command")
+    #     if command_name in audio_controllers:
+    #         pass
 
-    @commands.command(name='stop', help='Stops the song')
-    async def stop(self, ctx: commands.Context):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_playing():
-            voice_client.stop()
+
+    async def cog_before_invoke(self, ctx: Context):
+        if not ctx.guild:
+            raise commands.CommandInvokeError("Command must be in server.")
+        
+
+        if str(ctx.guild.id) not in self.musicDoc.document:
+            # add guild to database
+            await self.add_guild_volume(ctx)
+
+        if ctx.command.name.lower() in self.no_cog_check:
+            return
+
+        should_join = ctx.command.name.lower() in ['play','loadplaylist','shuffleplaylist','listento']
+        if not ctx.author.voice or not ctx.author.voice.channel:
+            raise commands.CommandInvokeError("Please join a voice channel first.")
+
+        if not ctx.guild.voice_client:
+            if should_join:
+                await ctx.author.voice.channel.connect(cls=Player)
+                return 
+
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if player and ctx.author.voice.channel.id != player.channel.id:
+            return await ctx.send(f"Please join the same chanel {player.channel.mention} as the bot first.")
+
+
+    async def should_disconnect(self,guild:discord.Guild):
+        DISCONNECT_AFTER = 60*3
+        await asyncio.sleep(DISCONNECT_AFTER)
+        player:Player | None = typing.cast(wavelink.Player,guild.voice_client)
+        if not player.playing:
+            # player already disconnected or error occurred
+            return
+        if not player.current and len(player.queue) == 0:
+            # clean up the player and clear queue
+            player.cleanup()
+            await player.disconnect()
+            self.messages.pop(guild.id)
+
+
+
+    def convert_to_minutes(self,timeValue):
+        # convert the milliseconds from player into minutes
+        minutes = (timeValue/1_000)/ 60
+        hour = ""
+        if minutes >= 60:
+            hour+= f"{minutes/60}"
+        seconds = int((timeValue/1_000)%60)
+        if seconds < 10:
+            seconds = f"0{seconds}"
+        return f"{math.trunc(minutes)}:{seconds}"
+
+
+
+    async def send_interaction(self,ctx:Context,message:str):
+        if ctx.interaction != None:
+            return await ctx.interaction.response.send_message(message)
+        return await ctx.send(message)
+
+
+
+    async def send_embed(self,payload:wavelink.TrackStartEventPayload,track:wavelink.Player):
+        """
+        Sends the embed to channel when a new song is playing
+        Embed includes:
+            title
+            url
+            thumbnail
+            duration
+            volume
+            requester
+        """
+        guild = payload.player.guild
+        info = self.messages[guild.id][track.identifier]
+        channel = guild.get_channel(info['channel'])
+        emb = discord.Embed(title=track.title,url=track.uri,color=discord.Color.random())
+        emb.set_footer(text=info['author'],icon_url=info['icon'])
+        emb.add_field(name='Duration',value=f"{self.convert_to_minutes(track.length)}")
+        emb.add_field(name='Volume',value=payload.player.volume)
+        emb.set_thumbnail(url=f"https://img.youtube.com/vi/{track.identifier}/0.jpg")
+        if channel.last_message_id == self.messages[guild.id]['last_message']:
+            # latest msg = bot msg
+            await channel.last_message.edit(embed=emb)
+        
         else:
-            await ctx.send("The bot is not playing anything at the moment.")
+            # new latest message
+            message:discord.Message = await channel.send(embed=emb)
+            self.messages[message.guild.id]['last_message'] = message.id
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_start(self,payload:wavelink.TrackStartEventPayload):
+        """
+        Instructions to run when new track starts
+        """
+        player: wavelink.Player | None = payload.player
+        if not player:
+            return 
+        guildVolume = self.musicDoc.document[str(payload.player.guild.id)]['vol']
+        if player.volume != guildVolume:
+            await player.set_volume(guildVolume)
+        await self.send_embed(payload,payload.track)
+
+
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_end(self,payload:wavelink.TrackEndEventPayload):
+        player: wavelink.Player | None = payload.player
+        if player:
+            if player.playing:
+                # NOTE: song skipped via `skip` command
+                return
+            
+            if player.queue.mode == wavelink.QueueMode.loop:
+                return await player.play(payload.track)
+            
+            if len(player.queue) != 0:
+                # paly next song in queue
+                next_song = await player.queue.get_wait()
+                return await player.play(next_song)
+
+
+    # @commands.Cog.listener('on_reaction_add')
+    # async def music_control_reactions(self,reaction:discord.Reaction,user:typing.Union[discord.User,discord.Member]):
+    #     if user != self.bot.usera
+
+
+
+
+    @commands.command(name='nowPlaying',aliases=['np'])
+    async def now_playing(self,ctx:Context):
+        """
+        Returns the currently playing song
+        {command_prefix}{command_name}
+        """
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if player and player.playing:    
+            return await ctx.send(f"[{player.current.title}]({player.current.uri})")
+        
+        return await ctx.send("No track currently playing")
+
+    @commands.command()
+    async def queue(self,ctx:Context):
+        """
+        Check what songs are currently in queue
+        {command_prefix}{command_name}
+        """
+        # TODO add error handler for when message limit > 2000
+        # check songs in queue 
+        player:Player = typing.cast(wavelink.Player,ctx.guild.voice_client)
+        if not player or len(player.queue) == 0:
+            return await ctx.send("Queue is empty.")
+        songs = ""
+        for index,song in enumerate(player.queue):
+            songs+=f"**{index+1}**: {song.title}\n"
+        return await ctx.send(songs)
+
+
+    async def add_message_info(self,ctx:Context,track:wavelink.Playable):
+        """
+        Adds last message ID
+        track identifier
+        author name/icon
+        channel
+        """
+        if ctx.guild.id in self.messages:
+            #add new info
+            if 'last_message' not in self.messages[ctx.guild.id]:
+                self.messages[ctx.guild.id]['last_message'] = None
+            self.messages[ctx.guild.id][track.identifier] = {'author':ctx.author.display_name,'icon':ctx.author.display_avatar.url,'channel':ctx.channel.id}
+        else:
+            #Adds first info
+            self.messages[ctx.guild.id] = {'last_message':None,track.identifier:{'author':ctx.author.display_name,'icon':ctx.author.display_avatar.url,'channel':ctx.channel.id}}
+
+
+    async def send_queue_message(self,ctx:Context,player:wavelink.Player,track:wavelink.Playable,embed_title=None):
+        if embed_title == None:
+            embed_title = track.title
+        if ctx.interaction != None:
+            # if player.current:
+            await player.queue.put_wait(track)
+            return await ctx.interaction.response.send_message(f'Added {track.title} to queue.',delete_after=60,ephemeral=True)
+        emb = discord.Embed(title="Song Queued",description=f"[{embed_title}]({track.uri})",color=discord.Color.random())
+        emb.set_thumbnail(url=f"https://img.youtube.com/vi/{track.identifier}/0.jpg")
+        emb.add_field(name='Duration',value=self.convert_to_minutes(track.length))
+        emb.set_footer(text=ctx.author.display_name,icon_url=ctx.author.display_avatar.url)
+        return await ctx.send(embed=emb)
+
+
+    
+
+    def title_vector(self,word1, word2):
+        tokens1 = set(word1.lower())
+        tokens2 = set(word2.lower())
+        unique_tokens = tokens1.union(tokens2)
+        vector1 = [1 if token in tokens1 else 0 for token in unique_tokens]
+        vector2 = [1 if token in tokens2 else 0 for token in unique_tokens]
+        dot_product = sum(a * b for a, b in zip(vector1, vector2))
+        magnitude1 = sum(a**2 for a in vector1) ** 0.5
+        magnitude2 = sum(a**2 for a in vector2) ** 0.5
+        if magnitude1 == 0 or magnitude2 == 0:
+            return 0 
+        else:
+            similarity = dot_product / (magnitude1 * magnitude2)
+            return similarity
+    
+    def match_titles(self,result,query):
+        title_vector = {"vector":0,'title':result[0]}
+        for title in result:
+            vector = self.title_vector(title.title,query)
+            if vector > title_vector['vector']:
+                title_vector = {"vector":vector,'title':title}
+
+
+        return title_vector['title']
+
+
+    @commands.hybrid_command()
+    async def play(self,ctx:commands.Context,*,query:str):
+        """
+        Search and play a song in a voice channel or add song to queue.
+        track(required): The title of the song or url to paly from Youtube
+        {command_prefix}{command_name} dududu! yaorenmao
+        """
+        search_result = await wavelink.Playable.search(query,source=wavelink.TrackSource.YouTube)
+        player:Player = typing.cast(Player,ctx.voice_client)
+        # raw_player = self.match_titles(search_result,query)
+        if isinstance(search_result,wavelink.Playlist):
+            first_track=search_result.tracks.pop(0)
+            await self.add_message_info(ctx,first_track)
+            for song in search_result.tracks:
+                await player.queue.put_wait(song)
+                await self.add_message_info(ctx,song)
+            
+            await player.play(first_track)
+            return await self.send_queue_message(ctx,player,first_track,search_result.name)
+        track = search_result[0]
+        await self.add_message_info(ctx,track)
+
+        if player.current:
+            # audio playing
+            # Queue song
+            await player.queue.put_wait(track)
+            return await self.send_queue_message(ctx,player,track)
+            
+
+        if not player.current:
+            # Start first song
+            if ctx.interaction != None:
+                return await ctx.interaction.response.send_message(f'Now playing {track.title}',ephemeral=True,delete_after=60)
+            # await self.send_queue_message(ctx,player,track)
+            return await player.play(track)
+    
+    # @play.error
+    # async def play_error(self,ctx:Context,error):
+    #     # TODO: Find what error is being produced when this error handler is invoked
+    #     if isinstance(error.original,wavelink.LavalinkLoadException):
+    #         wavelink.TrackExceptionEventPayload
+    #         return await self.send_interaction(ctx,error.original.args[0])
+
+    async def load_playlist_songs(self,ctx:Context,player:Player,songs:typing.List[str]):
+        tracks:typing.List[wavelink.Playable] = []
+        for song in songs:
+            track:wavelink.Playable = await wavelink.Playable.search(f"https://www.youtube.com/watch?v={song['id']}",source=wavelink.TrackSource.YouTube)
+            tracks.append(track[0])
+            await self.add_message_info(ctx,track[0])
+        await player.queue.put_wait(tracks)
+        return await ctx.message.add_reaction('🎶')
+
+
+
+
+    @commands.command(name='shufflePlaylist')
+    async def shuffle_playlist(self,ctx:Context):
+        """
+        Shuffles the songs in your playlist and start playing.
+        {command_prefix}{command_name}
+        """
+        songs = self.musicDoc.document['userPlaylist'][str(ctx.author.id)].copy()
+        random.shuffle(songs)
+        await ctx.invoke(self.bot.get_command('loadplaylist'),songs=songs)
+
+
+    
+    @shuffle_playlist.before_invoke 
+    async def before_shuffle_playlist(self,ctx:Context):
+        """
+        Check for if user has playlist saved in database
+        """
+        userPlaylist = self.musicDoc.document['userPlaylist']
+        if str(ctx.author.id) not in userPlaylist:
+            raise commands.CommandError("Please add songs to your playlist first.")
+
+    @shuffle_playlist.error
+    async def shuffle_playlist_error(self,ctx:Context,error:commands.CommandInvokeError):
+        return await ctx.send(error.original)
+
+
+    @commands.command(name='loadPlaylist')
+    async def load_playlist(self,ctx:Context,songs:typing.Dict| None=None):
+        """
+        Adds the songs in your personal playlist to queue and start it if no song currently playing
+        {command_prefix}{command_name}
+        """
+        if not songs:
+            songs = self.musicDoc.document['userPlaylist'][str(ctx.author.id)]
+        if str(ctx.author.id) not in self.musicDoc.document['userPlaylist']:
+            return await ctx.send("You don't have any songs saved.")
+        
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if player.current:
+            return await self.load_playlist_songs(ctx,player,songs)
+        first_song  = songs.pop(0)
+        url = f"https://www.youtube.com/watch?v={first_song['id']}"
+        first_track:typing.Union[wavelink.Playable, wavelink.Playlist] = await wavelink.Playable.search(url,source=wavelink.TrackSource.YouTube)
+        await self.add_message_info(ctx,first_track[0])
+        await player.play(first_track[0])
+        return await self.load_playlist_songs(ctx,player,songs)
+
+
+    @commands.command(name='listenTo')
+    async def listen_to(self,ctx:Context,guildId:int,trackPosition:int=0):
+        """
+        Listen along to the songs another server is playing
+        Using this command will replace the currently playing song if it's playing
+        guildId(required): The serverId that you're trying to listen along with
+        trackPosition(optional): Whether to start track from beginning (`0`) or play at the same track position (`1`) as the other server.
+        {command_prefix}{command_name} serverId
+        {command_prefix}{command_name} 823742837412 1
+        """
+        if isinstance(guildId,str):
+            guildId = int(guildId)
+        if isinstance(trackPosition,str):
+            trackPosition = int(trackPosition)
+            
+        if trackPosition not in [0,1]:
+            return await ctx.send("Please use `1` to play at same track position or `0` to start from beginning")
+        targetGuild:discord.Guild = self.bot.get_guild(guildId)
+        targetPlayer:Player = typing.cast(wavelink.Player,targetGuild.voice_client)
+        if trackPosition == 1:
+            trackPosition = targetPlayer.position
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        await self.add_message_info(ctx,targetPlayer.current)
+        await player.play(targetPlayer.current,start=trackPosition)
+
+
+    @commands.command(name='serverSongs')
+    async def guild_songs(self,ctx:Context):
+        """
+        View songs playing in other servers
+        To listen along, use command {command_prefix}listenTo serverId
+        {command_prefix}{command_name}
+        """
+        # checks what songs other servers are listening to
+        players = self.node.players
+        if not players:
+            return await ctx.send("No songs playing")
+        all_songs = ""
+        for player in players.values():
+            all_songs+=f"**{player.guild.name} ({player.guild.id})** - `{player.current.title}`\n"
+        return await ctx.send(all_songs)
+
+
+    @commands.command()
+    async def stop(self,ctx:Context):
+        """
+        Stops the audio and clear all song in queue
+        {command_prefix}{command_name}
+        """
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if player.current:
+            player.queue.clear()
+            await player.stop()
+            return await ctx.message.add_reaction('✅')
+        return await ctx.send("Audio already stopped.")
+
+    @commands.command(name='dcme')
+    async def disconnect_me(self,ctx:Context):
+        """
+        Disconnects bot from voice channel and the user if the user the user is alone after bot leaves
+        """
+        player:Player = typing.cast(Player,ctx.voice_client)
+        if player.current:
+            player.queue.clear()
+            await player.stop()
+        player.cleanup()
+        await player.disconnect()
+        voice_members = [member for member in ctx.author.voice.channel.members if not member.bot]
+        if len(voice_members) == 1:
+            await voice_members[0].move_to(channel=None)
+        return await ctx.message.add_reaction('✅')
+
+
+    @commands.command(aliases=['dc','leave'])
+    async def disconnect(self,ctx:Context):
+        """ 
+        Disconnects the bot from the voice channel and clears queued songs.
+        {command_prefix}{command_name}
+        """
+        player:Player = typing.cast(Player,ctx.voice_client)
+        if player.current:
+            player.queue.clear()
+            await player.stop()
+
+        player.cleanup()
+        await player.disconnect()
+        return await ctx.message.add_reaction('✅')
+
+
+    @commands.command(name='popQueue')
+    async def pop_queue(self,ctx:Context,position:int):
+        """
+        Remove song from queue by position.
+        {command_prefix}{command_name} position
+        position(required): The position(index) of the song in list
+        {command_prefix}{command_name} 3
+        """
+        if isinstance(position,str):
+            position = int(position)
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        previous_tracks = [track for track in player.queue]
+        removed_track = previous_tracks.pop(position-1)
+        player.queue.clear()
+        for track in previous_tracks:
+            await player.queue.put_wait(track)
+        
+        return await ctx.send(f"Removed **{removed_track.title}** from queue")
+
+
+    @commands.command(name='popPlaylist')
+    async def pop_playlist(self,ctx:Context,position:int):
+        """
+        Removed a song saved from your playlist with given index
+        {command_prefix}{command_name} position
+        position(required): The position of the song on your playlist to remove
+        {command_prefix}{command_name} 3 
+        """
+        if isinstance(position,str):
+            position = int(position)
+        if str(ctx.author.id) not in self.musicDoc.document['userPlaylist']:
+            return await ctx.send("You do not have songs in your playlist")
+        
+        removed_song = self.musicDoc.document['userPlaylist'][str(ctx.author.id)].pop(position-1)
+        await self.musicDoc.pull_item({f"userPlaylist.{ctx.author.id}":removed_song})
+        return await ctx.send(f"Removed song **{removed_song['title']}** from your playlist.")
+
+    
+    # @commands.command()
+    # async def load_youtube_playlist(self,ctx,*,playlist_url):
+    #     """
+    #     loads the songs from a youtube playlist into your discord bot playlist
+    #     """
+
+
+    @commands.command()
+    async def playlist(self,ctx:Context):
+        """
+        View your saved songs.
+        {command_prefix}{command_name}
+        """
+        if str(ctx.author.id) not in self.musicDoc.document['userPlaylist']:
+            return await ctx.send("You don't have any saved songs")
+        
+        songs =""
+        for index,song in enumerate(self.musicDoc.document['userPlaylist'][str(ctx.author.id)]):
+            songs+=f"**{index+1}**: {song['title']}\n"
+        return await ctx.send(songs)
+
+
+
+    @commands.command(name='saveSong')
+    async def save_song(self,ctx:Context):
+        """
+        Save a song to your playlist that the bot is currently playing
+        {command_prefix}{command_name}
+        """
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if not player.current:
+            return await ctx.send("No song currently playing to save.")
+
+        if str(ctx.author.id) in self.musicDoc.document['userPlaylist']:
+            song_ids = [song['id'] for song in self.musicDoc.document['userPlaylist'][str(ctx.author.id)]]
+            if player.current.identifier in song_ids:
+                return await ctx.send(f"**{player.current.title}** already saved.")
+        
+        
+            else:
+                await self.musicDoc.append_array({f"userPlaylist.{ctx.author.id}":{"title":player.current.title,"id":player.current.identifier}})
+        else:
+            # new playlist user
+            await self.musicDoc.set_items({f"userPlaylist.{ctx.author.id}":[{"title":player.current.title,"id":player.current.identifier}]})
+        
+        return await ctx.send(f"Saved **{player.current.title}** to your playlist")
+
+
+    @commands.command()
+    async def seek(self,ctx:Context,position:int):
+        """
+        Jump to a specific in the current audio playing. Value must be in seconds.
+        {command_prefix}{command_name} track_time
+        track(required): The time to skip to in seconds
+        {command_prefix}{command_name} 120
+        """
+        if isinstance(position,str):
+            position = int(position)
+        position*=1000
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if position >= player.current.length:
+            return await ctx.send(f"Position exceeds or equals to song duration of {player.current.length}")
+        
+        return await player.seek(position)
+
+    @commands.command()
+    async def skip(self,ctx:Context,position:Optional[int]):
+        """
+        Skip the current song the bot is playing or to a specific position in queue.
+        {command_prefix}{command_name} position
+        position(optional): The position to skip to in queue
+        {command_prefix}{command_name}
+        {command_prefix}{command_name} 3
+        """
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if isinstance(position,str):
+            position = int(position)
+        if len(player.queue) ==0:
+            return await ctx.send("No songs in queue to skip to.")
+        if position:
+            if position > len(player.queue):
+                return await ctx.send(f"Position exceeds queue count of {len(player.queue)}")
+            else:
+                new_track = player.queue[position-1]
+                player.queue.delete(position-1)
+                await player.play(new_track)
+        else:
+            await player.stop()
+        return await ctx.message.add_reaction('⏭')
+
+
+    @commands.command()
+    async def pause(self,ctx:Context):
+        """
+        Pause the music
+        {command_prefix}{command_name}
+        """
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+
+        if not player.current:
+            return await ctx.send("No audio currently playing")
+        
+        if player.paused:
+            return await ctx.send("Already paused")
+        
+        await player.pause(True)
+        return await ctx.message.add_reaction('⏸')
+
+
+    @commands.command()
+    async def resume(self,ctx:Context):
+        """
+        Resume the paused audio 
+        {command_prefix}{command_name}
+        """
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if not player.current:
+            return await ctx.send('No audio in track')
+        
+        if not player.paused:
+            return await ctx.send("Audio already playing.")
+
+        await player.pause(False)
+        return await ctx.message.add_reaction('▶️')
+
+
+    @commands.command()
+    async def repeat(self,ctx:Context):
+        """
+        Set song loop on/off.
+        {command_prefix}{command_name}
+        """
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if not player.playing:
+            return await ctx.send("No audio playing.")
+        if player.queue.mode == wavelink.QueueMode.loop:
+            player.queue.mode = wavelink.QueueMode.normal
+            return await ctx.send("Stopped loop")
+        player.queue.mode = wavelink.QueueMode.loop
+        return await ctx.send("Looping current song.")
+
+
+    @commands.command(aliases=['vol'])
+    async def volume(self,ctx:Context,_volume:typing.Optional[int]):
+        """
+        Set the volume of the bot.
+        {command_prefix}{command_name} volume
+        volume(optional): The volume for the music playing. If not provide, return current volume
+        {command_prefix}{command_name} 200
+        NOTE: max is 100, and makes it inaudible.
+        """
+        # NOTE: Rate limit volume updating later when more servers added
+        player:Player = typing.cast(wavelink.Player,ctx.voice_client)
+        if not _volume:
+            return await ctx.send(f'Volume: **{player.volume}%**')
+        if _volume >200:
+            _volume = 200
+            await ctx.send("Set volume to 200 because it can't exceed 200.")
+        await player.set_volume(_volume)
+        await self.musicDoc.set_items({f"{ctx.guild.id}.vol":_volume})
+        return await ctx.send(f"Set volume to {_volume}")
+
+
+
 
 async def setup(bot):
-    await bot.add_cog(YtStream(bot))
+    await bot.add_cog(Music(bot))
+

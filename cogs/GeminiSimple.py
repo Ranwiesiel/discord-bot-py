@@ -49,6 +49,7 @@ image_model = genai.GenerativeModel(model_name="gemini-1.5-flash", generation_co
 class Gemini(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.session = aiohttp.ClientSession()
 #On Message Function
 
     @commands.Cog.listener()
@@ -64,7 +65,7 @@ class Gemini(commands.Cog):
             async with message.channel.typing():
                 # Check for image attachments
                 if message.attachments:
-                    print("New Image Message FROM:" + str(message.author.id) + ": " + cleaned_text)
+                    # print("New Image Message FROM:" + str(message.author.id) + ": " + cleaned_text)
                     #Currently no chat history for images
                     for attachment in message.attachments:
                         #these are the only image extentions it currently accepts
@@ -83,7 +84,7 @@ class Gemini(commands.Cog):
                                     return
                 #Not an Image do text response
                 else:
-                    print("New Message FROM:" + str(message.author.id) + ": " + cleaned_text)
+                    # print("New Message FROM:" + str(message.author.id) + ": " + cleaned_text)
                     #Check for Keyword Reset
                     if "RESET" in cleaned_text:
                         #End back message
@@ -111,7 +112,7 @@ class Gemini(commands.Cog):
 
     async def generate_response_with_text(self, message_text):
         prompt_parts = [message_text]
-        print("Got textPrompt: " + message_text)
+        # print("Got textPrompt: " + message_text)
         response = text_model.generate_content(prompt_parts)
         if(response._error):
             return "❌" +  str(response._error)
@@ -169,7 +170,8 @@ class Gemini(commands.Cog):
         return cleaned_content
 
 
-
+    def cog_unload(self):
+        self.bot.loop.create_task(self.session.close())
 
 #---------------------------------------------Run Bot-------------------------------------------------
 async def setup(bot):

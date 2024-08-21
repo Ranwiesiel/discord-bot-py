@@ -7,6 +7,9 @@ import random
 import typing
 
 class Leveling(commands.Cog):
+    """
+    Leveling system for fun and interaction XD
+    """
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._cd = commands.CooldownMapping.from_cooldown(1, 6.0, commands.BucketType.member)
@@ -19,12 +22,14 @@ class Leveling(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        if isinstance(message.channel, discord.DMChannel):
+            return
         ratelimit = self.get_ratelimit(message)
         if ratelimit is None:
             if message.author.bot:
                 return
             
-            conn = sqlite3.connect("./cogs/levels.db")
+            conn = sqlite3.connect("./database/levels.db")
             cursor = conn.cursor()
             guild_id = message.guild.id
             user_id = message.author.id
@@ -69,7 +74,7 @@ class Leveling(commands.Cog):
         member_id = member.id
         guild_id = ctx.guild.id
 
-        conn = sqlite3.connect("./cogs/levels.db")
+        conn = sqlite3.connect("./database/levels.db")
         cursor = conn.cursor()
         cursor.execute(f"SELECT * FROM Users WHERE guild_id = {guild_id} AND user_id = {member_id}")
         result = cursor.fetchone()
