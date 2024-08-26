@@ -27,7 +27,7 @@ class Music(commands.Cog):
     async def cog_load(self):
         await self.setup_database()
         server_uri = f"http://127.0.0.1:2333"
-        node:Node = Node(uri=server_uri,password=os.getenv("lavalink_password"),identifier='ranwbot',inactive_channel_tokens=2,inactive_player_timeout=300)
+        node:Node = Node(uri=server_uri,password=os.getenv("lavalink_password"),identifier='ranwbot',inactive_channel_tokens=1,inactive_player_timeout=10)
         await wavelink.Pool.connect(client=self.bot,nodes=[node])
         self.node:Node = wavelink.Pool.get_node('ranwbot')
         print(f"Node: {self.node}")

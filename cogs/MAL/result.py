@@ -67,7 +67,7 @@ class MyAnimeList(commands.Cog):
 		Gives information about any anime via [MyAnimeList](https://myanimelist.net/).
 
 		**Usage:**
-		`prefix anime <name>`
+		`prefix anime Naruto`
 		"""
 		if ctx.guild:
 			pass
@@ -138,7 +138,7 @@ class MyAnimeList(commands.Cog):
 		Gives information about any manga via [MyAnimeList](https://myanimelist.net/).
 
 		**Usage:**
-		`prefix manga <name>`
+		`prefix manga Naruto`
 		"""
 		if ctx.guild:
 			pass
