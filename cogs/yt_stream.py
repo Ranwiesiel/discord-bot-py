@@ -11,7 +11,6 @@ from discord.ext import commands
 from wavelink import Player,Node
 from discord.ext import tasks
 import os
-
 from database.database_handler import MongoDatabase
 
 class Music(commands.Cog):
@@ -38,6 +37,11 @@ class Music(commands.Cog):
         collection = database['General']
         doc = await collection.find_one("music")
         self.musicDoc = MongoDatabase(client,collection,doc)
+
+
+
+
+
     async def cog_command_error(self, ctx: Context, error: commands.CommandError):
         if isinstance(error,commands.CommandInvokeError):
             return await ctx.send(error.original)
@@ -95,12 +99,11 @@ class Music(commands.Cog):
         DISCONNECT_AFTER = 60*3
         await asyncio.sleep(DISCONNECT_AFTER)
         player:Player | None = typing.cast(wavelink.Player,guild.voice_client)
-        if not player.playing:
+        if not player.channel or not player:
             # player already disconnected or error occurred
             return
-        if not player.current and len(player.queue) == 0:
+        if not player.playing and len(player.queue) == 0:
             # clean up the player and clear queue
-            player.cleanup()
             await player.disconnect()
             self.messages.pop(guild.id)
 
@@ -508,6 +511,7 @@ class Music(commands.Cog):
         
         removed_song = self.musicDoc.document['userPlaylist'][str(ctx.author.id)].pop(position-1)
         await self.musicDoc.pull_item({f"userPlaylist.{ctx.author.id}":removed_song})
+
         return await ctx.send(f"Removed song **{removed_song['title']}** from your playlist.")
 
     

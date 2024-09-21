@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import asyncio
 from itertools import cycle
 from motor.motor_asyncio import AsyncIOMotorClient as MotorClient
+import aiohttp
 
 logger = settings.logging.getLogger("bot")
 load_dotenv()
@@ -43,8 +44,24 @@ async def connect_database():
     collections = database['General']
     mongodb['client'] = client
     mongodb['collections'] = collections
-    mongodb['doc'] = await collections.find_one({"_id":"bot_prefixes"})
-    mongodb['status'] = await collections.find_one({"_id":"bot_status"})
+    prefix_doc = await collections.find_one({"_id":"bot_prefixes"})
+    if not prefix_doc:
+        prefix_doc = {"_id":"bot_prefixes"}
+        await collections.insert_one(prefix_doc)
+
+    mongodb['doc'] = prefix_doc
+    status_doc = await collections.find_one({"_id":"bot_status"})
+    if not status_doc:
+        #TODO: convert to async request later via aiohttp
+        async with aiohttp.ClientSession() as session:
+            resp = await session.get('https://kurusaki.com/kurusaki_bot_status')
+            status_doc = await resp.json()
+            status_doc['_id'] = 'bot_status'
+            await collections.insert_one(status_doc)
+            status_doc.pop("_id",None)
+            mongodb['status'] = status_doc
+    status_doc.pop("_id",None)
+    mongodb['status'] = status_doc
 
 
 
@@ -66,8 +83,8 @@ bot = commands.Bot(command_prefix=get_prefix, intents = intents, owner_id = owne
 
 @tasks.loop(minutes=1)
 async def auto_change_bot_status():
-    status_type = random.choice(list(mongodb['status']['ranwbot'].keys()))
-    status_message = random.choice(mongodb['status']['ranwbot'][status_type])
+    status_type = random.choice(list(mongodb['status'].keys()))
+    status_message = random.choice(mongodb['status'][status_type])
     await bot.change_presence(activity=discord.Activity(name=status_message,type=bot_status_types[status_type]))
 
 @auto_change_bot_status.after_loop
